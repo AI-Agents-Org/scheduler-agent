@@ -3,4 +3,4 @@ node_modules
 .mastra
 credentials.json
 service-account.json
-memory.db
+memory.db*

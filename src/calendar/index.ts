@@ -4,7 +4,7 @@ import path from 'path';
 
 const SERVICE_ACCOUNT_KEY_FILE = path.resolve(__dirname, '../../service-account.json');
 
-const CALENDAR_IDS = ['pt-br.brazilian#holiday@group.v.calendar.google.com', 'gabriel.ritter99@gmail.com']
+const CALENDAR_IDS = ['pt-br.brazilian#holiday@group.v.calendar.google.com', 'gabriel.ritter99@gmail.com', 'tainagomesaragao@gmail.com']
 // const SCOPES = ['https://www.googleapis.com/auth/calendar.readonly'];
 const SCOPES = ['https://www.googleapis.com/auth/calendar.events'];
 
@@ -17,46 +17,55 @@ export async function authenticate(): Promise<JWT> {
     return auth;
 }
 
-export async function listEventsParallel(auth: JWT, maxResults: number = 7, specificDate?: string) {
+export async function listEventsParallel(auth: JWT, specificDate: string) {
     const calendar = google.calendar({ version: 'v3', auth });
 
-    // Handle date filtering
-    let timeMin = new Date();
-    let timeMax: Date | undefined;
+    let timeMinDate: Date | undefined;
+    let timeMaxDate: Date | undefined;
 
     if (specificDate) {
-        if (specificDate.toLowerCase() === 'tomorrow') {
-            const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
+        const now = new Date();
+        if (specificDate.toLowerCase() === 'amanhã' || specificDate.toLowerCase() === 'amanha') {
+            const tomorrow = new Date(now);
+            tomorrow.setDate(now.getDate() + 1);
             tomorrow.setHours(0, 0, 0, 0);
-            timeMin = tomorrow;
+            timeMinDate = tomorrow;
 
             const dayAfterTomorrow = new Date(tomorrow);
-            dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 1);
-            timeMax = dayAfterTomorrow;
-        } else if (specificDate.toLowerCase() === 'today') {
-            timeMin.setHours(0, 0, 0, 0);
+            dayAfterTomorrow.setDate(tomorrow.getDate() + 1);
+            timeMaxDate = dayAfterTomorrow;
+        } else if (specificDate.toLowerCase() === 'hoje') {
+            const today = new Date(now);
+            today.setHours(0, 0, 0, 0);
+            timeMinDate = today;
 
-            const tomorrow = new Date(timeMin);
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            timeMax = tomorrow;
+            const tomorrowFromToday = new Date(today);
+            tomorrowFromToday.setDate(today.getDate() + 1);
+            timeMaxDate = tomorrowFromToday;
         } else if (specificDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
             // Format: YYYY-MM-DD
-            timeMin = new Date(`${specificDate}T00:00:00`);
+            // Ensure dates are parsed in UTC to avoid timezone issues with just YYYY-MM-DD
+            const parts = specificDate.split('-').map(Number);
+            timeMinDate = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2], 0, 0, 0));
 
-            const nextDay = new Date(timeMin);
-            nextDay.setDate(nextDay.getDate() + 1);
-            timeMax = nextDay;
+            timeMaxDate = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2] + 1, 0, 0, 0));
         }
+    }
+
+    // Se timeMinDate e timeMaxDate não foram definidos (specificDate inválido ou não fornecido de forma esperada),
+    // não buscar eventos ou retornar array vazio para evitar busca infinita.
+    if (!timeMinDate || !timeMaxDate) {
+        console.log('[INFO] specificDate inválido ou não fornecido para listEventsParallel. Nenhum evento será buscado.');
+        // Retorna um formato que a ferramenta espera (array de objetos com calendarId e events vazios)
+        return CALENDAR_IDS.map(id => ({ calendarId: id, items: [], events: [] }));
     }
 
     const promises = CALENDAR_IDS.map(calendarId =>
         calendar.events
             .list({
                 calendarId,
-                timeMin: timeMin.toISOString(),
-                ...(timeMax && { timeMax: timeMax.toISOString() }),
-                maxResults: maxResults,
+                timeMin: timeMinDate.toISOString(),
+                timeMax: timeMaxDate.toISOString(),
                 singleEvents: true,
                 orderBy: 'startTime',
             })

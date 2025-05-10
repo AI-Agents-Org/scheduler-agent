@@ -14,16 +14,18 @@ export const getCalendarEventsTool = createTool({
         try {
             console.log('contexto: --------------------------------------------------------------------', context)
             const auth = await authenticate();
-            const maxResults = context.maxResults || 7;
             const specificDate = context.specificDate;
 
             // Call the function and get the formatted results
-            const calendars = await listEventsParallel(auth, maxResults, specificDate);
+            if (specificDate) {
 
-            return {
-                success: true,
-                calendars
-            };
+                const calendars = await listEventsParallel(auth, specificDate);
+
+                return {
+                    success: true,
+                    calendars
+                };
+            }
         } catch (error) {
             console.error('Erro ao listar eventos do calendário:', error);
             return {
@@ -82,5 +84,25 @@ export const postCalendarEventTool = createTool({
         }
     }
 });
+
+export const getCurrentDateTool = createTool({
+    id: "Get Current Date",
+    description: "Retorna a data atual no formato YYYY-MM-DD.",
+    inputSchema: z.object({}), // Sem input necessário
+    execute: async () => {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = (now.getMonth() + 1).toString().padStart(2, '0'); // Meses são 0-indexados
+        const day = now.getDate().toString().padStart(2, '0');
+        const currentDate = `${year}-${month}-${day}`;
+        return {
+            success: true,
+            currentDate: currentDate,
+            fullDateTime: now.toISOString()
+        };
+    }
+});
+
+
 
 
